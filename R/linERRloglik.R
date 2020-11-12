@@ -1,13 +1,13 @@
 #' @title Negative log-likelihood
-#' @description Compute the negative log-likelihood for the linear ERR model
-#' @param params vector of parameter values (beta, alpha_2, ... , alpha_L, delta_1, ... , delta_p) to evaluate the log-likelihood at
-#' @param data data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location and a column serving as a case-control indicator. Other covariates can also be included.
+#' @description Compute the negative log-likelihood for the linear ERR model in a matched case-control dataset
+#' @param params vector of parameter values (\eqn{\beta}, \eqn{\alpha_2}, ... , \eqn{\alpha_L}, \eqn{\gamma_1}, ... , \eqn{\gamma_p}) to evaluate the log-likelihood at
+#' @param data data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location (value between 1 and the number of locations, with location \eqn{x} corresponding to the \eqn{x}-th column index in \code{doses}) and a column serving as a case-control indicator. Other covariates can also be included, in this case a parameter for each covariate column will be estimated. Hence factor variables need to be converted to dummy variables using \code{model.matrix}. If using \code{ccmethod='meandose'}, a column for tumor location is still required but in this case the column can be a vector of ones.
 #' @param doses vector containing the indices of columns containing dose information, in the desired order.
 #' @param set column index containing matched set numbers.
 #' @param status column index containing case status.
 #' @param loc column index containing the location of the matched set's case's second tumor.
 #' @param corrvars vector containing the indices of columns containing variables to be corrected for.
-#' @param ccmethod choice of method of analysis; one of meandose, CCML, CCAL or CL.
+#' @param ccmethod choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL
 #' @return Minus log likelihood in params
 #' @examples
 #' data(linearERRdata1)

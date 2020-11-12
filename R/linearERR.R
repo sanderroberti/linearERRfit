@@ -1,24 +1,54 @@
 #' @title Fit linear ERR model and perform jackknife correction
-#' @description Fits the linear ERR model on a dataset and performs first and second order jackknife correction
-#' @param data data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location and a column serving as a case-control indicator. Other covariates can also be included.
-#' @param doses vector containing the indices of columns containing dose information, in the desired order.
+#' @description Fits the linear ERR model on matched case-control data and performs first and second order jackknife correction
+#' @param data data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location (value between 1 and the number of locations, with location \eqn{x} corresponding to the \eqn{x}-th column index in \code{doses}) and a column serving as a case-control indicator. Other covariates can also be included, in this case a parameter for each covariate column will be estimated. Hence factor variables need to be converted to dummy variables using \code{model.matrix}. If using \code{ccmethod='meandose'}, a column for tumor location is still required but in this case the column can be a vector of ones.
+#' @param doses vector containing the indices of columns containing dose information.
 #' @param set column index containing matched set numbers.
 #' @param status column index containing case status.
 #' @param loc column index containing the location of the matched set's case's second tumor.
 #' @param corrvars vector containing the indices of columns containing variables to be corrected for.
-#' @param repar reparametrize to beta=exp(xi)
-#' @param ccmethod choice of method of analysis; one of meandose, CCML, CCAL or CL.
-#' @param initpars initial values for parameters
-#' @param fitopt list with options to pass to 'control' argument of optimizer
-#' @param uplimBeta upper limit for beta=exp(xi)
-#' @param profCI boolean: compute 95\% profile likelihood confidence interval for beta/xi?
-#' @param doJK1 perform first order jackknife correction?
-#' @param doJK2 perform second order jackknife correction?
+#' @param repar reparametrize to \eqn{\beta=exp(\xi)}? Defaults to \code{FALSE}
+#' @param ccmethod choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL
+#' @param initpars initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, a 0 for the reference location, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.
+#' @param fitopt list with options to pass to \code{control} argument of optimizer (see details)
+#' @param uplimBeta upper limit for \eqn{\beta=exp(\xi)}, default value 5. This is used for constraining the MLE estimation in some settings and for the jackknife inclusion criteria, and can be infinite except when Brent optimization is used (see details)
+#' @param profCI boolean: compute 95\% profile likelihood confidence interval for \eqn{\beta}/\eqn{\xi}? Default value TRUE.
+#' @param doJK1 perform first order jackknife correction? Automatically set to \code{TRUE} when \code{doJK2=TRUE}. Caution: this can take a long time to run. Default value FALSE
+#' @param doJK2 perform second order jackknife correction? Caution: this can take a very long time to run. Default value FALSE
 #' @param jkscorethresh square L2 norm threshold for leave-one-out and leave-two-out estimates to be included in the computation of the first and second order jackknife corrected estimate, respectively
 #' @param jkvalrange range of leave-one-out and leave-two-out beta/xi estimates to be allowed in the computation of the first and second order jackknife corrected estimate, respectively
-#' @return object with components 'MLE' and 'jackknife'. The 'jackknife' component in turn has components 'firstorder' and 'secondorder'
+#' @return Object with components \code{MLE} and \code{jackknife}. \code{MLE} has components:
+#'
+#' \item{coef}{estimated model coefficients}
+#' \item{sd}{estimated standard deviation for all coefficient estimates}
+#' \item{vcov}{variance-covariance matrix for all estimates}
+#' \item{score}{score in the MLE}
+#' \item{convergence}{convergence code produced by the optimizer (for details refer to \code{optim})}
+#' \item{message}{convergence message produced by the optimizer}
+#' \item{dosepval}{p-value for the LRT comparing the produced model with a model without dose effect. Note that the null model this is based on uses the same optimization algorithm used for the MLE, meaning one-dimensional Nelder-Mead is used when \code{repar=TRUE} and the full model has 2 free parameters (see details)}
+#' \item{profCI}{the 95\% profile likelihood confidence interval. In some cases one or both of the bounds of the CI cannot be obtained automatically. In that case, it is possible to use the \code{proflik} function that is an output of \code{linearERRfit} directly. Note: the same optimization algorithm that was used for the MLE will be used, even if this model only has one parameter (see details)}
+#'
+#'
+#' \code{jackknife} has components \code{firstorder} and \code{secondorder}. Both of these have components:
+#'
+#' \item{coef}{the jackknife-corrected coefficient estimates}
+#' \item{details}{data frame with information on leave-one-out or leave-two-out estimates, with columns:
+#' \itemize{
+#' \item{\code{set} or \code{set1} and \code{set2}, the left-out set(s)}
+#' \item{\code{included}, a 0/1 variable indicating whether this row was used to produce the corrected estimate}
+#' \item{\code{conv}, convergence code for each model produced by the optimizer}
+#' \item{\code{coef}, the leave-one-out or leave-two-out coefficient estimates}
+#' \item{\code{score}, the score in the leave-one-out or leave-two-out estimate}
+#' }}
+#' Note that the \code{details} for the second order jackknife only include leave-two-out estimates. To access leave-one-out estimates, use \code{details} for the first order jackknife.
 #' @importFrom stats model.matrix pchisq uniroot
 #' @importFrom utils combn
+#' @details This is the main function of the package, used for fitting the linear ERR model in matched case-control data. Use this function to estimate the MLE (including a profile likelihood confidence interval for the dose effect) and to perform first and second order jackknife corrections.
+#'
+#' The model being fit is HR=\eqn{\sum(1+\beta d_l)exp(\alpha_l+X^T\gamma)}, where the sum is over organ locations. Here \eqn{\beta} is the dose effect, \eqn{\alpha} are the location effects and \eqn{\gamma} are other covariate effects. The model can be reparametrized to HR=\eqn{\sum(1+exp(\xi) d_l)exp(\alpha_l+X^T\gamma)} using \code{repar=TRUE}. In the original parametrization, \eqn{\beta} is constrained such that HR cannot be negative. There are different choices for the design used to estimate the parameters: mean organ dose, CCML, CL, and CCAL. Mean organ dose (\code{ccmethod='meandose'}) uses the mean of the supplied location doses and compares that mean dose between case and matched controls. The other choices (CCML, CL and CCAL) use the tumor location for the case and compare either only between patients (CCML), only within patients (CL) or both between and within patients (CCAL). CCML only compares the same location between patients, and hence cannot be used to estimate location effects. Similarly, CL compares within patients and cannot be used to estimate covariate effects other than dose, meaning \code{corrvars} should not be supplied for CL.
+#'
+#' For one-dimensional models (i.e., mean dose or CCML without additional covariates), the Brent algorithm is used with a search interval (-10,log(\code{uplimBeta})) when \code{repar=TRUE} and (L,\code{uplimBeta}) otherwise, where L is determined by the positivity constraint for HR. For other optimizations, the L-BFGS-B algorithm (with constraint \code{uplimBeta}) is used when \code{repar=FALSE}, and the unconstrained Nelder-Mead is used when \code{repar=TRUE}. For details refer to the function \code{optim}, also for \code{fitopt} settings. Note that when supplying \code{ndeps} to \code{fitopt}, a value needs to be specified for every free parameter in the model. For more flexibility in optimizion, use \code{linERRloglik} and optimize directly.
+#'
+#' The jackknife procedure allows for filtering of the leave-one-out and leave-two-out estimates, which is important as the model can be unstable and produce extreme estimates. All estimates reaching the maximum number of iterations are excluded, as well as estimates larger than uplimBeta (if applicable). Further, the user can set a threshold for the square L2 norm of the score for an estimate (default .01), as well as an allowed value range for the \eqn{\beta}/\eqn{\xi} estimate itself. When the jackknife is run, the output object contains an element \code{details}, allowing the user to inspect the produced leave-one-out and leave-two-out estimates.
 #' @examples
 #' data(linearERRdata1)
 #'
@@ -29,7 +59,6 @@
 #' fitCCML$jackknife$firstorder$coef
 
 #' @export
-#'
 
 
 linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CCAL", repar=FALSE, initpars=rep(0,length(doses)+length(corrvars)), fitopt=NULL, uplimBeta=5,profCI=TRUE,doJK1=FALSE,doJK2=FALSE,jkscorethresh=.01,jkvalrange=c(-Inf, Inf)){
@@ -83,7 +112,7 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
 
     jk1coef <- length(setnrs)*mainfit$fit@coef-(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,])
 
-    jk1details <- data.frame(cbind(setnrs, included=jk1included,conv=jk1conv,coef=jk1coefs,score=jk1scores))
+    jk1details <- data.frame(cbind(set=setnrs, included=jk1included,conv=jk1conv,coef=jk1coefs,score=jk1scores))
 
     jackknife1 <- list(coef=jk1coef, details=jk1details)
 

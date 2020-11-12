@@ -21,9 +21,9 @@ linearERRfit(
 )
 }
 \arguments{
-\item{data}{data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location and a column serving as a case-control indicator. Other covariates can also be included.}
+\item{data}{data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location (value between 1 and the number of locations, with location \eqn{x} corresponding to the \eqn{x}-th column index in \code{doses}) and a column serving as a case-control indicator. Other covariates can also be included, in this case a parameter for each covariate column will be estimated. Hence factor variables need to be converted to dummy variables using \code{model.matrix}. If using \code{ccmethod='meandose'}, a column for tumor location is still required but in this case the column can be a vector of ones.}
 
-\item{doses}{vector containing the indices of columns containing dose information, in the desired order.}
+\item{doses}{vector containing the indices of columns containing dose information.}
 
 \item{set}{column index containing matched set numbers.}
 
@@ -33,25 +33,31 @@ linearERRfit(
 
 \item{corrvars}{vector containing the indices of columns containing variables to be corrected for.}
 
-\item{repar}{reparametrize to beta=exp(xi)}
+\item{repar}{reparametrize to \eqn{\beta=exp(\xi)}? Defaults to \code{FALSE}}
 
-\item{ccmethod}{choice of method of analysis; one of meandose, CCML, CCAL or CL.}
+\item{ccmethod}{choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL}
 
-\item{initpars}{initial values for parameters}
+\item{initpars}{initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, a 0 for the reference location, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.}
 
-\item{fitopt}{list with options to pass to 'control' argument of optimizer}
+\item{fitopt}{list with options to pass to \code{control} argument of optimizer}
 
-\item{fitNull}{boolean: also fit model without dose effect?}
+\item{fitNull}{boolean: also fit model without dose effect? Defaults to \code{TRUE}. Note: the same optimization algorithm that was used for the MLE will be used for the null model, even if the null model only has one parameter (see details)}
 
-\item{useOld}{if TRUE, a previous (slower) implementation of the log-likelihood function will be used}
+\item{useOld}{if TRUE, a previous (slower) implementation of the log-likelihood function will be used. Defaults to \code{FALSE}}
 
-\item{uplimBeta}{upper limit for beta=exp(xi)}
+\item{uplimBeta}{upper limit for \eqn{\beta=exp(\xi)}, default value 5. This is used for constraining the MLE estimation in some settings and for the jackknife inclusion criteria, and can be infinite except when Brent optimization is used (see help for \code{linearERR})}
 }
 \value{
-object with components 'MLE' and 'jackknife'. The 'jackknife' component in turn has components 'firstorder' and 'secondorder'
+Object with components:
+\item{fit}{object produced by \code{mle2}}
+\item{nullfit}{fit without dose effect produced by \code{mle2}}
+\item{proflik}{profile likelihood: one-dimensional function of \eqn{\beta} or \eqn{\xi}. Note that the optimization used is the same as for the MLE, leading to one-dimensional Nelder-Mead optimization in certain cases (see details of \code{linearERR})}
 }
 \description{
 Fits the linear ERR model on a dataset
+}
+\details{
+This is a stripped down version of \code{linearERR}, and should only be used when that function does not suffice. For more details refer to the help of \code{linearERR}.
 }
 \examples{
 data(linearERRdata1)
@@ -72,4 +78,7 @@ bbmle::coef(fitmeandose$fit, exclude.fixed=TRUE)
 bbmle::coef(fitCCML$fit, exclude.fixed=TRUE)
 bbmle::coef(fitCCAL$fit, exclude.fixed=TRUE)
 bbmle::coef(fitCL$fit, exclude.fixed=TRUE)
+}
+\seealso{
+linearERR
 }
