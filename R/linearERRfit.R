@@ -8,7 +8,7 @@
 #' @param corrvars vector containing the indices of columns containing variables to be corrected for.
 #' @param repar reparametrize to \eqn{\beta=exp(\xi)}? Defaults to \code{FALSE}
 #' @param ccmethod choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL
-#' @param initpars initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, a 0 for the reference location, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.
+#' @param initpars initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.
 #' @param fitopt list with options to pass to \code{control} argument of optimizer
 #' @param fitNull boolean: also fit model without dose effect? Defaults to \code{TRUE}. Note: the same optimization algorithm that was used for the MLE will be used for the null model, even if the null model only has one parameter (see details)
 #' @param useOld if TRUE, a previous (slower) implementation of the log-likelihood function will be used. Defaults to \code{FALSE}

@@ -1,6 +1,6 @@
 #' @title Compute the Firth-corrected score function
 #' @description Compute the Firth-corrected score for a matched case-control dataset
-#' @param params vector of parameters (\eqn{\beta/\xi}, \eqn{\alpha_2}, ... , \eqn{\alpha_L}, \eqn{\gamma_1}, ... , \eqn{\gamma_p}) for which to compute the modified score. Note that when \code{repar=TRUE}, \eqn{\xi} needs to be supplied
+#' @param params vector of parameters (\eqn{\beta/\xi}, \eqn{\alpha_2}, ... , \eqn{\alpha_L}, \eqn{\gamma_1}, ... , \eqn{\gamma_p}) for which to compute the modified score. Parameters \eqn{\alpha} only need to be supplied when \code{ccmethod="CL"} or \code{ccmethod="CCAL"}. Note that when \code{repar=TRUE}, \eqn{\xi} needs to be supplied
 #' @param data data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location (value between 1 and the number of locations, with location \eqn{x} corresponding to the \eqn{x}-th column index in \code{doses}) and a column serving as a case-control indicator. Other covariates can also be included, in this case a parameter for each covariate column will be estimated. Hence factor variables need to be converted to dummy variables using \code{model.matrix}. If using \code{ccmethod='meandose'}, a column for tumor location is still required but in this case the column can be a vector of ones.
 #' @param doses vector containing the indices of columns containing dose information.
 #' @param set column index containing matched set numbers.
@@ -21,7 +21,7 @@
 #' data=linearERRdata1,set=1, doses=2:6, status=8, loc=7, corrvars=9,ccmethod="CCAL")
 #'
 #' # score in the truth, reparametrized
-#' score1_repar <- linERRscore(params=c(.3,rep(-1.386294,4),log(2)),
+#' score1_repar <- linERRscore(params=c(log(.3),rep(-1.386294,4),log(2)),
 #' data=linearERRdata1,set=1, doses=2:6, status=8, loc=7, corrvars=9,ccmethod="CCAL", repar=TRUE)
 #'
 #' score1$U # Original score
@@ -42,32 +42,44 @@
 
 linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars=NULL, repar=FALSE){
 
+  data <- data[data[,set] %in% as.numeric(names(which(table(data[,set],data[,status])[,2]==1))),]
+  if(ccmethod!="CL") data <- data[data[,set] %in% as.numeric(names(which(table(data[,set])>1))),]
+
   sp <- split(data,data[,set])
   sp <- lapply(sp, as.matrix)
 
   if(repar==FALSE){
     byset <- lapply(sp, function(x){
+      # x is the x-matrix for a single matched set
       x <- as.data.frame(x)
+
+      # transform such that each row corresponds to an organ location
       longx <- reshape(x, direction="long", varying=list(doses), v.names="dose", timevar="loc")
 
+      # construct X: a matrix with D*=d/(1+beta*d), dummies for location effects and all variables in the exponential part of the model
       if(ccmethod=="CCAL"){
         X <- as.matrix(cbind(D=longx$dose/(1+params[1]*longx$dose), model.matrix(~factor(loc)-1, data=longx)[,-1], longx[, names(x)[corrvars], drop=FALSE]))
 
       } else if(ccmethod=="CL"){
+        # CL only uses locations from the case patient
         longx <- longx[longx[,names(data)[status]]==1,]
         X <- as.matrix(cbind(D=longx$dose/(1+params[1]*longx$dose), model.matrix(~factor(loc)-1, data=longx)[,-1]))
 
       } else if(ccmethod%in%c("CCML")){
+        # CCML only uses the tumor location
         longx <- longx[longx$loc==longx[,names(data)[loc]],]
         X <- as.matrix(cbind(D=longx$dose/(1+params[1]*longx$dose), longx[, names(x)[corrvars], drop=FALSE]))
 
       } else if(ccmethod=="meandose"){
+        # Mean dose only uses the mean organ dose
         longx <- cbind(x[, set, drop = FALSE], data.frame(dose = rowMeans(x[, doses])), x[, -c(set, doses), drop = FALSE])
         X <- as.matrix(cbind(D = rowMeans(x[, doses])/(1 + params[1] * rowMeans(x[, doses])), x[, names(x)[corrvars], drop = FALSE]))
       }
 
+      # vector of tumor location probabilities (RR_l/sum(RR))
       p <- (1+params[1]*longx$dose)*exp(c(X[,-1,drop=FALSE]%*%params[-1]))/sum((1+params[1]*longx$dose)*exp(c(X[,-1,drop=FALSE]%*%params[-1])))
 
+      # compute S0 (scalar), SX (vector, one component for each variable), SXX (matrix) and SXXX (array) as written in manuscript. The first component is always for beta
       S0 <- sum((1+params[1]*longx$dose)*exp(c(X[,-1,drop=FALSE]%*%params[-1])))
       SX <- ((1+params[1]*longx$dose)*exp(c(X[,-1,drop=FALSE]%*%params[-1])))%*%X
 
@@ -84,9 +96,11 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
         }
       }
 
+      # Expected value for X and x^2
       EX <- p%*%X
       EX2 <- p%*%X^2
 
+      # Components for EUU, expected value of product of 2 U's
       tmp1 <- EX2[1]-EX[1]^2
       tmp2 <- SXX[1,-1]/S0-SX[1]*SX[-1]/S0^2
       tmp3 <- SXX[-1,-1]/S0- SXSX[-1,-1]/S0^2
@@ -94,7 +108,8 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
       EUU <- rbind(c(tmp1, tmp2),cbind(tmp2,tmp3))
 
 
-
+      # Compute EUUU (expected values of product of 3 U's) and EUU2 (expected values of product of U_a and U_{b,c})
+      # Definitions of components are given in the manuscript
       EUUU <- array(dim=c(ncol(X),ncol(X),ncol(X)))
       EUU2 <- array(dim=c(ncol(X),ncol(X),ncol(X)))
       for(k in 1:ncol(X)){
@@ -128,6 +143,8 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
           }
         }
       }
+
+      # Compute the score U and second derivative U2
       if(!(ccmethod=="meandose")){
         U <- c(X[longx[,names(data)[status]]==1 & longx[,names(data)[loc]] == longx$loc,1]-SX[1]/S0, X[longx[,names(data)[status]]==1 & longx[,names(data)[loc]] == longx$loc,-1]-SX[-1]/S0)
         tmp1 <- -X[longx[,names(data)[status]]==1 & longx[,names(data)[loc]] == longx$loc,1]^2+SX[1]^2/S0^2
@@ -145,6 +162,7 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
       list(S0=S0, SX=SX, SXX=SXX, SXXX=SXXX, SXSX=SXSX, EUU=EUU, EUUU=EUUU, EUU2=EUU2, U=U, U2=U2)
     })
   } else {
+    # Computation for the reparametrized setting structured equivalently to the original parametrization. See documentation above for more details
     params[1] <- exp(params[1])
     byset <- lapply(sp, function(x){
       x <- as.data.frame(x)
@@ -249,6 +267,7 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
     })
   }
 
+  # Sum all components
   EUU <- Reduce('+',lapply(byset, function(x) x$EUU))
   EUUU <- Reduce('+',lapply(byset, function(x) x$EUUU))
   EUU2 <- Reduce('+',lapply(byset, function(x) x$EUU2))
@@ -257,9 +276,11 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
   U2 <- Reduce('+',lapply(byset, function(x) x$U2))
 
   infomat <- solve(EUU)
+
+  # A will contain the Firth modification terms
   A <- rep(0, length(params))
 
-
+  # Compute modifications using equation (B9) in manuscript
   for(r in 1:length(params)){
     res <- 0
     for(s in 1:length(params)){

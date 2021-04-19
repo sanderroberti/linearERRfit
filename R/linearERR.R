@@ -8,7 +8,7 @@
 #' @param corrvars vector containing the indices of columns containing variables to be corrected for.
 #' @param repar reparametrize to \eqn{\beta=exp(\xi)}? Defaults to \code{FALSE}
 #' @param ccmethod choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL
-#' @param initpars initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, a 0 for the reference location, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.
+#' @param initpars initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.
 #' @param fitopt list with options to pass to \code{control} argument of optimizer (see details)
 #' @param uplimBeta upper limit for \eqn{\beta=exp(\xi)}, default value 5. This is used for constraining the MLE estimation in some settings and for the jackknife inclusion criteria, and can be infinite except when Brent optimization is used (see details)
 #' @param profCI boolean: compute 95\% profile likelihood confidence interval for \eqn{\beta}/\eqn{\xi}? Default value TRUE.
@@ -26,7 +26,7 @@
 #' \item{message}{convergence message produced by the optimizer}
 #' \item{dosepval}{p-value for the LRT comparing the produced model with a model without dose effect. Note that the null model this is based on uses the same optimization algorithm used for the MLE, meaning one-dimensional Nelder-Mead is used when \code{repar=TRUE} and the full model has 2 free parameters (see details)}
 #' \item{profCI}{the 95\% profile likelihood confidence interval. In some cases one or both of the bounds of the CI cannot be obtained automatically. In that case, it is possible to use the \code{proflik} function that is an output of \code{linearERRfit} directly. Note: the same optimization algorithm that was used for the MLE will be used, even if this model only has one parameter (see details)}
-#'
+#' \item{fitobj}{Fit object produced by linearERRfit}
 #'
 #' \code{jackknife} has components \code{firstorder} and \code{secondorder}. Both of these have components:
 #'
@@ -86,7 +86,7 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
     upLim <- NULL
   }
 
-  MLE <- list(coef=mainfit$fit@coef,sd=sqrt(diag(mainfit$fit@vcov)), vcov=mainfit$fit@vcov, score=MLEscore, convergence=mainfit$fit@details$convergence, message=mainfit$fit@details$message, dosepval=pval, profCI=c(lo=lowLim, up=upLim))
+  MLE <- list(coef=mainfit$fit@coef,sd=sqrt(diag(mainfit$fit@vcov)), vcov=mainfit$fit@vcov, score=MLEscore, convergence=mainfit$fit@details$convergence, message=mainfit$fit@details$message, dosepval=pval, profCI=c(lo=lowLim, up=upLim), fitobj=mainfit)
 
   # Jackknife
 
