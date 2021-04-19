@@ -36,7 +36,7 @@
 #' score2$U # Original score
 #' score2$U+score2$A # Firth score
 #'
-#' @importFrom data.table data.table
+#' @importFrom data.table data.table ':=' .SD
 #' @export
 
 
@@ -78,6 +78,7 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
 
   S0long <- (1+params[1]*datalong$dose)*exp(as.matrix(datalong[,names(data)[corrvars], drop=FALSE])%*%delta)
   if(ccmethod!="meandose") S0long <- S0long*exp(model.matrix(~factor(loc)-1, data=datalong)%*%alpha)
+
   S0 <- as.data.frame(data.table(S0long)[, list(S0=sum(V1)), by=list(set=datalong[,names(data)[set]])]) #aggregate(list(S0=S0long),by=list(set=datalong[,names(data)[set]]), FUN=sum)
 
   #SX <- lapply(X, function(x) as.data.frame(data.table(x*S0long)[, list(SX=sum(V1)), by=list(set=datalong[,names(data)[set]])]))#aggregate(list(SX=x*S0long), by=list(set=datalong[,names(data)[set]]),FUN=sum))

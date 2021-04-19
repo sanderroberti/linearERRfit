@@ -36,7 +36,7 @@ linearERRfirth(
 
 \item{ccmethod}{choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL}
 
-\item{initpars}{initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for all free parameters (\eqn{\beta} or \eqn{\xi}, one for each location effect (except the reference) when using CCAL or CCAL, and for each other covariate if applicable, in that order). This is different from \code{linearERR}, where all location effects have to be supplied regardless of the chosen \code{ccmethod}. Note that if \code{repar=TRUE}, the first initial value is used for \eqn{\xi}.}
+\item{initpars}{initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for all free parameters (\eqn{\beta} or \eqn{\xi}, one for each location effect (except the reference) when using CL or CCAL, and for each other covariate if applicable, in that order). Note that if \code{repar=TRUE}, the first initial value is used for \eqn{\xi}.}
 
 \item{lowerlim}{lower bound for model parameters, in the same order as \code{initpars}. When not supplied, -\code{Inf} is used for all coefficients (except when \code{repar=FALSE}, see details). Note that when \code{repar=TRUE}, the first entry is the lower limit for \eqn{\xi}}
 

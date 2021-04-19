@@ -37,7 +37,7 @@ linearERRfit(
 
 \item{ccmethod}{choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL}
 
-\item{initpars}{initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, a 0 for the reference location, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.}
+\item{initpars}{initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for \eqn{\beta} or \eqn{\xi}, one for all of the other location effects and one for each other covariate (in that order). Note that if \code{repar=TRUE}, the initial value is used for \eqn{\xi}.}
 
 \item{fitopt}{list with options to pass to \code{control} argument of optimizer}
 

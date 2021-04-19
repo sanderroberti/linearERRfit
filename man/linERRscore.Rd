@@ -17,7 +17,7 @@ linERRscore(
 )
 }
 \arguments{
-\item{params}{vector of parameters (\eqn{\beta/\xi}, \eqn{\alpha_2}, ... , \eqn{\alpha_L}, \eqn{\gamma_1}, ... , \eqn{\gamma_p}) for which to compute the modified score. Note that when \code{repar=TRUE}, \eqn{\xi} needs to be supplied}
+\item{params}{vector of parameters (\eqn{\beta/\xi}, \eqn{\alpha_2}, ... , \eqn{\alpha_L}, \eqn{\gamma_1}, ... , \eqn{\gamma_p}) for which to compute the modified score. Parameters \eqn{\alpha} only need to be supplied when \code{ccmethod="CL"} or \code{ccmethod="CCAL"}. Note that when \code{repar=TRUE}, \eqn{\xi} needs to be supplied}
 
 \item{data}{data frame containing matched case-control data, with a number of columns for doses to different locations, a column containing matched set numbers, a column containing the case's tumor location (value between 1 and the number of locations, with location \eqn{x} corresponding to the \eqn{x}-th column index in \code{doses}) and a column serving as a case-control indicator. Other covariates can also be included, in this case a parameter for each covariate column will be estimated. Hence factor variables need to be converted to dummy variables using \code{model.matrix}. If using \code{ccmethod='meandose'}, a column for tumor location is still required but in this case the column can be a vector of ones.}
 
@@ -52,7 +52,7 @@ score1 <- linERRscore(params=c(.3,rep(-1.386294,4),log(2)),
 data=linearERRdata1,set=1, doses=2:6, status=8, loc=7, corrvars=9,ccmethod="CCAL")
 
 # score in the truth, reparametrized
-score1_repar <- linERRscore(params=c(.3,rep(-1.386294,4),log(2)),
+score1_repar <- linERRscore(params=c(log(.3),rep(-1.386294,4),log(2)),
 data=linearERRdata1,set=1, doses=2:6, status=8, loc=7, corrvars=9,ccmethod="CCAL", repar=TRUE)
 
 score1$U # Original score
