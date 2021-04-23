@@ -41,7 +41,7 @@
 #' }}
 #' Note that the \code{details} for the second order jackknife only include leave-two-out estimates. To access leave-one-out estimates, use \code{details} for the first order jackknife.
 #' @importFrom stats model.matrix pchisq uniroot
-#' @importFrom utils combn
+#' @importFrom utils combn setTxtProgressBar txtProgressBar
 #' @details This is the main function of the package, used for fitting the linear ERR model in matched case-control data. Use this function to estimate the MLE (including a profile likelihood confidence interval for the dose effect) and to perform first and second order jackknife corrections.
 #'
 #' The model being fit is HR=\eqn{\sum(1+\beta d_l)exp(\alpha_l+X^T\gamma)}, where the sum is over organ locations. Here \eqn{\beta} is the dose effect, \eqn{\alpha} are the location effects and \eqn{\gamma} are other covariate effects. The model can be reparametrized to HR=\eqn{\sum(1+exp(\xi) d_l)exp(\alpha_l+X^T\gamma)} using \code{repar=TRUE}. In the original parametrization, \eqn{\beta} is constrained such that HR cannot be negative. There are different choices for the design used to estimate the parameters: mean organ dose, CCML, CL, and CCAL. Mean organ dose (\code{ccmethod='meandose'}) uses the mean of the supplied location doses and compares that mean dose between case and matched controls. The other choices (CCML, CL and CCAL) use the tumor location for the case and compare either only between patients (CCML), only within patients (CL) or both between and within patients (CCAL). CCML only compares the same location between patients, and hence cannot be used to estimate location effects. Similarly, CL compares within patients and cannot be used to estimate covariate effects other than dose, meaning \code{corrvars} should not be supplied for CL.
@@ -55,7 +55,7 @@
 #' fitCCML <- linearERR(data=linearERRdata1, set=1, doses=2:6, status=8,
 #' loc=7, corrvars=9, repar=FALSE, ccmethod="CCML", doJK1=TRUE)
 #'
-#' fitCCML$MLE
+#' fitCCML$MLE$coef
 #' fitCCML$jackknife$firstorder$coef
 
 #' @export
@@ -67,26 +67,26 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
 
   mainfit <- linearERRfit(data=data, doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar, initpars=initpars, fitopt=fitopt, ccmethod=ccmethod, uplimBeta=uplimBeta)
 
-  MLEscore <- linERRscore(params=mainfit$fit@coef, data=data, doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar,ccmethod=ccmethod)$U
+  MLEscore <- linERRscore(params=mainfit$fit$par, data=data, doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar,ccmethod=ccmethod)$U
 
-  pval <- pchisq(2*(mainfit$nullfit@min-mainfit$fit@min), df=1, lower.tail=FALSE)
+  pval <- pchisq(2*(mainfit$nullfit$value-mainfit$fit$value), df=1, lower.tail=FALSE)
 
 
   if(profCI){
 
 
     g <- function(para){
-      1-pchisq(2*(mainfit$proflik(para)-mainfit$fit@min),df=1)-.05
+      1-pchisq(2*(mainfit$proflik(para)-mainfit$fit$value),df=1)-.05
     }
-    lowLim <- tryCatch(uniroot(g, lower=ifelse(repar,-20,mainfit$fit@call$lower[1]), upper=mainfit$fit@coef[1], extendInt="no")$root, error=function(e) NA)
-    upLim <- tryCatch(uniroot(g, lower=mainfit$fit@coef[1],upper=ifelse(repar,log(100),100), extendInt="no", maxiter=150)$root, error=function(e) NA)
+    lowLim <- tryCatch(uniroot(g, lower=ifelse(repar,-20,mainfit$fit$betathresh), upper=mainfit$fit$par[1], extendInt="no")$root, error=function(e) NA)
+    upLim <- tryCatch(uniroot(g, lower=mainfit$fit$par[1],upper=ifelse(repar,log(100),100), extendInt="no", maxiter=150)$root, error=function(e) NA)
 
   } else{
     lowLim <- NULL
     upLim <- NULL
   }
 
-  MLE <- list(coef=mainfit$fit@coef,sd=sqrt(diag(mainfit$fit@vcov)), vcov=mainfit$fit@vcov, score=MLEscore, convergence=mainfit$fit@details$convergence, message=mainfit$fit@details$message, dosepval=pval, profCI=c(lo=lowLim, up=upLim), fitobj=mainfit)
+  MLE <- list(coef=mainfit$fit$par,sd=sqrt(diag(solve(mainfit$fit$hessian))), vcov=solve(mainfit$fit$hessian), score=MLEscore, convergence=mainfit$fit$convergence, message=mainfit$fit$message, dosepval=pval, profCI=c(lo=lowLim, up=upLim), fitobj=mainfit)
 
   # Jackknife
 
@@ -94,27 +94,33 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
 
 
   if(doJK1){
+    message("First order jackknife:")
+    pb <- txtProgressBar(min = 1, max = length(setnrs), style = 3)
 
     outfunjk1 <- function(exclset) {
       jk1fit <- linearERRfit(data=data[!(data[,set]== exclset),], doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar, initpars=initpars, fitopt=fitopt, ccmethod=ccmethod, fitNull=FALSE, uplimBeta=uplimBeta)
-      jk1score <- tryCatch(linERRscore(params=jk1fit$fit@coef, data=data[!(data[,set]== exclset),], doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar,ccmethod=ccmethod)$U, error=function(e) rep(NA, length(jk1fit$fit@fullcoef)))
+      jk1score <- tryCatch(linERRscore(params=jk1fit$fit$par, data=data[!(data[,set]== exclset),], doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar,ccmethod=ccmethod)$U, error=function(e) rep(NA, length(jk1fit$fit$fullcoef)))
       list(fit=jk1fit,score=jk1score)
     }
-    jk1out <- lapply(setnrs, function(k) outfunjk1(k))
+    jk1out <- lapply(setnrs, function(k) {
+      setTxtProgressBar(pb, which(setnrs==k))
+      return(outfunjk1(k))
+    })
 
-    jk1coefs <- sapply(jk1out, function(x) x$fit$fit@coef)
-    jk1coefs <- as.data.frame(matrix(jk1coefs, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,names(jk1out[[1]]$fit$fit@coef))))
+    jk1coefs <- sapply(jk1out, function(x) x$fit$fit$par)
+    jk1coefs <- as.data.frame(matrix(jk1coefs, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,names(jk1out[[1]]$fit$fit$par))))
     jk1scores <- sapply(jk1out, function(x) x$score)
-    jk1scores <- as.data.frame(matrix(jk1scores, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,names(jk1out[[1]]$fit$fit@coef))))
-    jk1conv <- sapply(jk1out, function(x) x$fit$fit@details$convergence)
+    jk1scores <- as.data.frame(matrix(jk1scores, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,names(jk1out[[1]]$fit$fit$par))))
+    jk1conv <- sapply(jk1out, function(x) x$fit$fit$convergence)
 
     jk1included <- (1-1*(jk1coefs[,1]==ifelse(repar,log(uplimBeta),uplimBeta)))*(rowSums(jk1scores^2)<jkscorethresh)*(1-(jk1conv==1))*(jk1coefs[,1]>=jkvalrange[1])*(jk1coefs[,1]<=jkvalrange[2])
 
-    jk1coef <- length(setnrs)*mainfit$fit@coef-(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,])
+    jk1coef <- length(setnrs)*mainfit$fit$par-(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,])
 
     jk1details <- data.frame(cbind(set=setnrs, included=jk1included,conv=jk1conv,coef=jk1coefs,score=jk1scores))
 
     jackknife1 <- list(coef=jk1coef, details=jk1details)
+    close(pb)
 
   } else {
     jackknife1 <- NULL
@@ -126,28 +132,35 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
   if(doJK2){
     allpairs <- t(combn(setnrs,2))
 
+    message("Second order jackknife:")
+    pb2 <- txtProgressBar(min = 1, max = nrow(allpairs), style = 3)
+
     outfunjk2 <- function(pair) {
       jk2fit <- linearERRfit(data=data[!(data[,set]%in% pair),], doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar, initpars=initpars, fitopt=fitopt, ccmethod=ccmethod, fitNull=FALSE, uplimBeta=uplimBeta)
-      jk2score <- tryCatch(linERRscore(params=jk2fit$fit@coef, data=data[!(data[,set]%in% pair),], doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar,ccmethod=ccmethod)$U, error=function(e) rep(NA, length(jk2fit$fit@fullcoef)))
+      jk2score <- tryCatch(linERRscore(params=jk2fit$fit$par, data=data[!(data[,set]%in% pair),], doses=doses, set=set, status=status, loc=loc, corrvars=corrvars, repar=repar,ccmethod=ccmethod)$U, error=function(e) rep(NA, length(jk2fit$fit$fullcoef)))
       list(fit=jk2fit, score=jk2score)
     }
-    jk2out <- lapply(1:nrow(allpairs), function(k) outfunjk2(allpairs[k,]))
+    jk2out <- lapply(1:nrow(allpairs), function(k){
+      setTxtProgressBar(pb2, k)
+      outfunjk2(allpairs[k,])
+    })
 
-    jk2coefs <- sapply(jk2out, function(x) x$fit$fit@coef)
-    jk2coefs <- as.data.frame(matrix(jk2coefs, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,names(jk2out[[1]]$fit$fit@coef))))
+    jk2coefs <- sapply(jk2out, function(x) x$fit$fit$par)
+    jk2coefs <- as.data.frame(matrix(jk2coefs, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,names(jk2out[[1]]$fit$fit$par))))
     jk2scores <- sapply(jk2out, function(x) x$score)
-    jk2scores <- as.data.frame(matrix(jk2scores, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,names(jk2out[[1]]$fit$fit@coef))))
-    jk2conv <- sapply(jk2out, function(x) x$fit$fit@details$convergence)
+    jk2scores <- as.data.frame(matrix(jk2scores, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,names(jk2out[[1]]$fit$fit$par))))
+    jk2conv <- sapply(jk2out, function(x) x$fit$fit$convergence)
 
     jk2included <- (1-1*(jk2coefs[,1]==ifelse(repar,log(uplimBeta),uplimBeta)))*(rowSums(jk2scores^2)<jkscorethresh)*(1-(jk2conv==1))*(jk2coefs[,1]>=jkvalrange[1])*(jk2coefs[,1]<=jkvalrange[2])
 
-    jk2coef <- (length(setnrs)^3*mainfit$fit@coef-(2*length(setnrs)^2-2*length(setnrs)+1)*(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,, drop=FALSE])+(length(setnrs)-1)^2*(length(setnrs)-2)*colMeans(jk2coefs[jk2included == 1,, drop=FALSE]))/(2*length(setnrs)-1)
+    jk2coef <- (length(setnrs)^3*mainfit$fit$par-(2*length(setnrs)^2-2*length(setnrs)+1)*(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,, drop=FALSE])+(length(setnrs)-1)^2*(length(setnrs)-2)*colMeans(jk2coefs[jk2included == 1,, drop=FALSE]))/(2*length(setnrs)-1)
 
     allpairs <- as.data.frame(allpairs)
     names(allpairs) <- c("set1","set2")
     jk2details <- data.frame(cbind(allpairs, included=jk2included,conv=jk2conv,coef=jk2coefs,score=jk2scores))
 
     jackknife2 <- list(coef=jk2coef, details=jk2details)
+    close(pb2)
 
   } else {
     jackknife2 <- NULL

@@ -1,7 +1,7 @@
 Package: linearERRfit
 Type: Package
 Title: Fit linear ERR models, including dose information to multiple locations
-Version: 0.1.2
+Version: 0.1.3
 Author: Sander Roberti
 Maintainer: Sander Roberti <s.roberti@nki.nl>
 Description: Fit linear ERR models, including dose information to multiple locations.
@@ -10,5 +10,5 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.1
 Imports: 
-    bbmle, data.table
+    data.table, numDeriv
 Depends: R (>= 3.5.0)

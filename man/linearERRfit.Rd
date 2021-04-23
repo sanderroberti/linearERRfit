@@ -72,12 +72,12 @@ fitCCAL <- linearERRfit(data=linearERRdata1, set=1, doses=2:6,
 status=8, loc=7, corrvars=9, repar=FALSE, ccmethod="CCAL")
 
 fitCL <- linearERRfit(data=linearERRdata1, set=1, doses=2:6,
-status=8, loc=7, corrvars=9, repar=FALSE, ccmethod="CL")
+status=8, loc=7, corrvars=NULL, repar=FALSE, ccmethod="CL")
 
-bbmle::coef(fitmeandose$fit, exclude.fixed=TRUE)
-bbmle::coef(fitCCML$fit, exclude.fixed=TRUE)
-bbmle::coef(fitCCAL$fit, exclude.fixed=TRUE)
-bbmle::coef(fitCL$fit, exclude.fixed=TRUE)
+fitmeandose$fit$par
+fitCCML$fit$par
+fitCCAL$fit$par
+fitCL$fit$par
 }
 \seealso{
 linearERR

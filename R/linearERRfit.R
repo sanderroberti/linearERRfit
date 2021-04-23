@@ -17,7 +17,8 @@
 #' \item{fit}{object produced by \code{mle2}}
 #' \item{nullfit}{fit without dose effect produced by \code{mle2}}
 #' \item{proflik}{profile likelihood: one-dimensional function of \eqn{\beta} or \eqn{\xi}. Note that the optimization used is the same as for the MLE, leading to one-dimensional Nelder-Mead optimization in certain cases (see details of \code{linearERR})}
-#' @importFrom bbmle mle2 parnames parnames<- coef
+#' @importFrom numDeriv hessian
+#' @importFrom stats constrOptim
 #' @details This is a stripped down version of \code{linearERR}, and should only be used when that function does not suffice. For more details refer to the help of \code{linearERR}.
 #' @seealso linearERR
 #' @examples
@@ -33,12 +34,12 @@
 #' status=8, loc=7, corrvars=9, repar=FALSE, ccmethod="CCAL")
 #'
 #' fitCL <- linearERRfit(data=linearERRdata1, set=1, doses=2:6,
-#' status=8, loc=7, corrvars=9, repar=FALSE, ccmethod="CL")
+#' status=8, loc=7, corrvars=NULL, repar=FALSE, ccmethod="CL")
 #'
-#' bbmle::coef(fitmeandose$fit, exclude.fixed=TRUE)
-#' bbmle::coef(fitCCML$fit, exclude.fixed=TRUE)
-#' bbmle::coef(fitCCAL$fit, exclude.fixed=TRUE)
-#' bbmle::coef(fitCL$fit, exclude.fixed=TRUE)
+#' fitmeandose$fit$par
+#' fitCCML$fit$par
+#' fitCCAL$fit$par
+#' fitCL$fit$par
 #' @export
 
 
@@ -50,25 +51,26 @@ linearERRfit <- function(data, doses, set, status, loc, corrvars=NULL, repar=FAL
     opt_method <- "Brent"
     if(is.infinite(uplimBeta)) stop("Please provide a finite value for uplimBeta to use in Brent optimization")
   } else{
-    opt_method <- ifelse(repar, "Nelder-Mead", "L-BFGS-B")
+    opt_method <- "constrOptim"
+    if(repar & is.infinite(uplimBeta)) stop("uplimBeta needs to be finite for the current settings")
   }
 
   if(is.null(fitopt$maxit)){
     fitopt <- c(fitopt, list(maxit=5000))
   }
-  if(is.null(fitopt$reltol) & opt_method!="L-BFGS-B"){
+  if(is.null(fitopt$reltol)){
     fitopt <- c(fitopt, list(reltol=1e-10))
   }
-  if (is.null(fitopt$pgtol) & opt_method=="L-BFGS-B"){
-    fitopt <- c(fitopt, list(pgtol=1e-8))
-  }
-  if (is.null(fitopt$factr) & opt_method=="L-BFGS-B"){
-    fitopt <- c(fitopt, list(factr=1e4))
-  }
-  if (is.null(fitopt$ndeps) & opt_method=="L-BFGS-B"){
-    parlen <- 1+ifelse(ccmethod %in% c("CCAL","CL"),length(doses)-1,0)+length(corrvars)
-    fitopt <- c(fitopt, list(ndeps=rep(1e-5, parlen)))
-  }
+  # if (is.null(fitopt$pgtol) & opt_method=="L-BFGS-B"){
+  #   fitopt <- c(fitopt, list(pgtol=1e-8))
+  # }
+  # if (is.null(fitopt$factr) & opt_method=="L-BFGS-B"){
+  #   fitopt <- c(fitopt, list(factr=1e4))
+  # }
+  # if (is.null(fitopt$ndeps) & opt_method=="L-BFGS-B"){
+  #   parlen <- 1+ifelse(ccmethod %in% c("CCAL","CL"),length(doses)-1,0)+length(corrvars)
+  #   fitopt <- c(fitopt, list(ndeps=rep(1e-5, parlen)))
+  # }
 
   likfun <- function(params){
     if(repar) params[1] <- exp(params[1])
@@ -77,49 +79,49 @@ linearERRfit <- function(data, doses, set, status, loc, corrvars=NULL, repar=FAL
     } else {
       linERRloglik(params, data=data, set=set, doses=doses,status=status,loc=loc,corrvars=corrvars, ccmethod=ccmethod)
     }
-
+  }
+  scorefun <- function(params){
+    linERRscore(params, data=data, set=set, doses=doses,status=status,loc=loc,corrvars=corrvars, ccmethod=ccmethod, repar=repar)
   }
 
   if(opt_method!="Brent"){
     names <- c(ifelse(repar,"xi","beta"), paste0("alpha",2:length(doses)),names(data)[corrvars])
     names(initpars) <- names
-    parnames(likfun) <- names
+    #parnames(likfun) <- names
   } else {
-    names <- "params"
+    names <- ifelse(repar, "xi","beta")
     initpars <- list(params=as.numeric(initpars[1]))
-    parnames(likfun) <- names
+    names(initpars) <- names
+    #parnames(likfun) <- names
   }
+
+  strt <- initpars
 
   if(ccmethod=="CCAL"){
     fxd <- NULL
-    if(opt_method!="Nelder-Mead"){
-      lw <- sapply(names,FUN=function(x) -Inf)
-      if(!repar) lw[1] <- -1/max(data[,doses])+.0001
-      if(repar){
-        up <- list(xi=log(uplimBeta))
-      } else {
-        up <- list(beta=uplimBeta)
-      }
+
+    lw <- sapply(names,FUN=function(x) -Inf)
+    if(!repar) lw[1] <- -1/max(data[,doses])+.0001
+    if(repar){
+      up <- list(xi=log(uplimBeta))
     } else {
-      lw <- NULL
-      up <- NULL
+      up <- list(beta=uplimBeta)
     }
+
   } else if (ccmethod=="CL"){
-    fxd <- sapply(names(data)[corrvars], function(i) 0)
-    if(opt_method!="Nelder-Mead"){
-      lw <- sapply(names[!names %in% names(data)[corrvars]],FUN=function(x) -Inf)
-      if(!repar) lw[1] <- -1/max(data[data[,status]==1,doses])+.0001
-      if(repar){
-        up <- list(xi=log(uplimBeta))
-      } else {
-        up <- list(beta=uplimBeta)
-      }
+    #strt <- strt[names(strt)%in% c("xi","beta", paste0("alpha",2:length(doses)))]
+    fxd <- NULL
+
+    lw <- sapply(names[!names %in% names(data)[corrvars]],FUN=function(x) -Inf)
+    if(!repar) lw[1] <- -1/max(data[data[,status]==1,doses])+.0001
+    if(repar){
+      up <- list(xi=log(uplimBeta))
     } else {
-      lw <- NULL
-      up <- NULL
+      up <- list(beta=uplimBeta)
     }
+
   } else if(ccmethod=="CCML"){
-    if(opt_method=="L-BFGS-B"){
+    if(opt_method=="constrOptim"){
       fxd <- sapply(paste0("alpha",2:length(doses)), function(i) 0)
       lw <- sapply(c(ifelse(repar,"xi","beta"),tail(names, length(corrvars))),FUN=function(x) -Inf)
       if(!repar) {lw[1] <- -1/max(data[,doses][cbind(1:nrow(data), data[,loc])])+.0001}
@@ -133,16 +135,16 @@ linearERRfit <- function(data, doses, set, status, loc, corrvars=NULL, repar=FAL
       fxd <- NULL
       lw <- list(params=ifelse(repar, -10,  -1/max(data[,doses][cbind(1:nrow(data), data[,loc])])+.0001))
       up <- list(params=ifelse(repar,log(uplimBeta),uplimBeta))
-    } else { # Nelder-Mead
-      fxd <- sapply(paste0("alpha",2:length(doses)), function(i) 0)
-      lw <-NULL
-      up <- NULL
-    }
+    } #else { # Nelder-Mead
+    #   fxd <- sapply(paste0("alpha",2:length(doses)), function(i) 0)
+    #   lw <-NULL
+    #   up <- NULL
+    #}
     #} else{
     #  up <- NULL
     #}
   } else if(ccmethod=="meandose"){
-    if(opt_method=="L-BFGS-B"){
+    if(opt_method=="constrOptim"){
       fxd <- sapply(paste0("alpha",2:length(doses)), function(i) 0)
       lw <- sapply(c(ifelse(repar,"xi","beta"),tail(names, length(corrvars))),FUN=function(x) -Inf)
       if(!repar) {lw[1] <- -1/max(rowMeans(data[,doses]))+.0001}
@@ -156,61 +158,165 @@ linearERRfit <- function(data, doses, set, status, loc, corrvars=NULL, repar=FAL
       fxd <- NULL
       lw <- list(params=ifelse(repar, -10,  -1/max(data[,doses][cbind(1:nrow(data), data[,loc])])+.0001))
       up <- list(params=ifelse(repar,log(uplimBeta),uplimBeta))
-    } else { # Nelder-Mead
-      fxd <- sapply(paste0("alpha",2:length(doses)), function(i) 0)
-      up <- NULL
-      lw <- NULL
-    }
+    }# else { # Nelder-Mead
+    #   fxd <- sapply(paste0("alpha",2:length(doses)), function(i) 0)
+    #   up <- NULL
+    #   lw <- NULL
+    # }
     #} else{
     #  up <- NULL
     #}
   }
 
 
-  fit <- mle2(likfun, start=initpars, vecpar=(opt_method!="Brent"),fixed=fxd,upper=up, lower=lw, control=fitopt, method=opt_method)
+
+  if(opt_method=="constrOptim"){
+    strt0 <- strt[!names(strt)%in%names(fxd)]
+    strt[names(fxd)] <- unlist(fxd)
+    if(repar){
+      #fit <- mle2(likfun, start=strt,fixed=fxd, method=opt_method,control=fitopt, vecpar=TRUE, parnames=names)
+      ui <- matrix(c(-1,rep(0,length(strt0)-1)),nrow=1)
+      ci <- -1*log(uplimBeta)
+    } else {
+      ui <- matrix(c(1,rep(0,length(strt0)-1)),nrow=1)
+      ci <- lw[1]
+    }
+    betathresh <- ci
+
+    fit <- constrOptim(strt0,function(x){
+      y <- strt
+      y[names(x)] <- x
+      likfun(y)
+    }, ui=ui, ci=ci, grad=function(x){
+      y <- strt
+      y[names(x)] <- x
+      if(!is.null(fxd)){
+        res <-  -scorefun(y[-which(names(y) %in% names(fxd))])$U
+        if(any(names(res) %in% names(fxd))) res <- res[-which(names(res) %in% names(fxd))]
+      } else {
+        res <-  -scorefun(y)$U
+      }
+      res
+    }, control=fitopt, outer.iterations=200, hessian=TRUE)
+    tmpcoef <- strt
+    tmpcoef[names(fit$par)] <- fit$par
+    #fit$par <- tmpcoef
+
+    fit$fullcoef <- c(tmpcoef[1],tmpcoef[-1])
+    names(fit$fullcoef) <- names
+    fit$betathresh <- betathresh
+  } else {
+    betathresh <- lw
+    fit <- optim(initpars, function(x){
+      likfun(c(x, rep(0, length(doses)+length(corrvars)-1)))
+    }, method=opt_method, lower=lw, upper=up, control=fitopt, hessian=TRUE)
+
+    fit$fullcoef <- fit$par
+    fit$betathresh <- betathresh
+  }
+
+
+  #fit <- mle2(likfun, start=initpars, vecpar=(opt_method!="Brent"),fixed=fxd,upper=up, lower=lw, control=fitopt, method=opt_method)
 
   if(fitNull){
-    if(opt_method!="Brent"){
-      fitoptnull <- fitopt
-      fitoptnull$ndeps <- fitoptnull$ndeps[-1]
-      if(repar){
-        fxd2 <- c(fxd, list(xi=-999999))
-      } else {
-        fxd2 <- c(fxd, list(beta=0))
-      }
+    repar0 <- repar
+    repar <- FALSE
+    names[1] <- "beta"
+    if(opt_method!="Brent" ){
+
+
+      fxd2 <- c(fxd, list(beta=0))
+
+
+      strt <- sapply(names,FUN=function(x) 0)
+      strt0 <- strt[!names(strt)%in%names(fxd2)]
+      strt[names(fxd2)] <- unlist(fxd2)
+      ui <- matrix(c(-1,rep(0,length(strt0)-1)),nrow=1)
+      ci <- -20
+
+      nullfit <- constrOptim(strt0,function(x){
+        y <- strt
+        y[names(x)] <- x
+        likfun(y)
+      }, ui=ui, ci=ci, grad=function(x){
+        y <- strt
+        y[names(x)] <- x
+        if(!is.null(fxd)){
+          res <-  -scorefun(y[-which(names(y) %in% names(fxd))])$U
+          res <- res[-which(names(res) %in% names(fxd2))]
+        } else {
+          res <-  -scorefun(y)$U
+          res <- res[-which(names(res) %in% c("beta"))]
+        }
+
+      }, control=fitopt, outer.iterations=200, hessian=TRUE)
+
+
+
+
     } else {
-      fitoptnull <- fitopt
-      fxd2 <- list(params=ifelse(repar, -999999, 0))
+      nullfit <- list(par=0, value=likfun(c(0, rep(0, length(doses)+length(corrvars)-1))), hessian=hessian(function(x) likfun(c(x, rep(0, length(doses)+length(corrvars)-1))), 0))
+
     }
 
-    lw2 <- lw[-1]
-    up2 <- up[-1]
-    if(length(lw2)==0) lw2 <- NULL
-    if(length(up2)==0) up2 <- NULL
-    nullfit <- mle2(likfun, start=initpars, vecpar=(opt_method!="Brent"),fixed=fxd2,upper=up2, lower=lw2, control=fitoptnull, method=opt_method)
+    repar <- repar0
+    names[1] <- ifelse(repar, "xi","beta")
+
+    #
+    # lw2 <- lw[-1]
+    # up2 <- up[-1]
+    # if(length(lw2)==0) lw2 <- NULL
+    # if(length(up2)==0) up2 <- NULL
+    # nullfit <- mle2(likfun, start=initpars, vecpar=(opt_method!="Brent"),fixed=fxd2,upper=up2, lower=lw2, control=fitoptnull, method=opt_method)
+
   } else {
     nullfit <- NULL
   }
 
   proflik <- function(x){
     if(opt_method!="Brent"){
-      fitoptprof <- fitopt
-      fitoptprof$ndeps <- fitoptprof$ndeps[-1]
+
       if(repar){
         fxd3 <- c(fxd, list(xi=x))
       } else {
         fxd3 <- c(fxd, list(beta=x))
       }
-    } else {
-      fitoptprof <- fitopt
-      fxd3 <- list(params=x)
-    }
-    lw3 <- lw[-1]
-    up3 <- up[-1]
-    if(length(lw3)==0) lw3 <- NULL
-    if(length(up3)==0) up3 <- NULL
+      strt <- sapply(names,FUN=function(x) 0)
+      strt0 <- strt[!names(strt)%in%names(fxd3)]
+      strt[names(fxd3)] <- unlist(fxd3)
+      ui <- matrix(c(-1,rep(0,length(strt0)-1)),nrow=1)
+      ci <- -20
 
-    mle2(likfun, start=initpars, vecpar=(opt_method!="Brent"),fixed=fxd3,upper=up3, lower=lw3, control=fitoptprof, method=opt_method)@min
+      proffit <- constrOptim(strt0,function(xx){
+        y <- strt
+        y[names(xx)] <- xx
+        likfun(y)
+      }, ui=ui, ci=ci, grad=function(xx){
+        y <- strt
+        y[names(xx)] <- xx
+        if(!is.null(fxd)){
+          res <-  -scorefun(y[-which(names(y) %in% names(fxd))])$U
+          res <- res[-which(names(res) %in% names(fxd3))]
+        } else {
+          res <-  -scorefun(y)$U
+          res <- res[-which(names(res) %in% c("xi","beta"))]
+        }
+
+      }, control=fitopt, outer.iterations=200, hessian=TRUE)
+    } else {
+      proffit <- list(par=x, value=likfun(c(x, rep(0, length(doses)+length(corrvars)-1))), hessian=hessian(function(xxx) likfun(c(xxx, rep(0, length(doses)+length(corrvars)-1))), x))
+
+      # fitoptprof <- fitopt
+      # fxd3 <- list(params=x)
+    }
+    # lw3 <- lw[-1]
+    # up3 <- up[-1]
+    # if(length(lw3)==0) lw3 <- NULL
+    # if(length(up3)==0) up3 <- NULL
+
+
+    proffit$value
+    #mle2(likfun, start=initpars, vecpar=(opt_method!="Brent"),fixed=fxd3,upper=up3, lower=lw3, control=fitoptprof, method=opt_method)@min
   }
 
 

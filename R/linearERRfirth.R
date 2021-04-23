@@ -9,12 +9,12 @@
 #' @param repar reparametrize to \eqn{\beta=exp(\xi)}? It is recommended to reparametrize when using CL or CCAL or when using additional covariates. Defaults to \code{FALSE}
 #' @param ccmethod choice of method of analysis: one of meandose, CCML, CCAL or CL. Defaults to CCAL
 #' @param initpars initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for all free parameters (\eqn{\beta} or \eqn{\xi}, one for each location effect (except the reference) when using CL or CCAL, and for each other covariate if applicable, in that order). Note that if \code{repar=TRUE}, the first initial value is used for \eqn{\xi}.
-#' @param lowerlim lower bound for model parameters, in the same order as \code{initpars}. When not supplied, -\code{Inf} is used for all coefficients (except when \code{repar=FALSE}, see details). Note that when \code{repar=TRUE}, the first entry is the lower limit for \eqn{\xi}
-#' @param upperlim upper bound for model parameters, in the same order as \code{initpars}. When not supplied, \code{Inf} is used for all coefficients. Note that when \code{repar=TRUE}, the first entry is the upper limit for \eqn{\xi}
+#' @param lowerlim lower bound for model parameters, in the same order as \code{initpars}. At least one upper or lower limit needs to be finite. Note that when \code{repar=TRUE}, the first entry is the lower limit for \eqn{\xi}. When \code{repar=FALSE}, the lower limit for \eqn{\beta} cannot be smaller than \eqn{-1/max(d)} where the maximum is taken among all relevant doses for the chosen \code{ccmethod}. If this is the case, the limit will automatically be changed to that value
+#' @param upperlim upper bound for model parameters, in the same order as \code{initpars}. At least one upper or lower limit needs to be finite. Note that when \code{repar=TRUE}, the first entry is the upper limit for \eqn{\xi}. When \code{repar=TRUE}, if no other lower or upper limit is given as input, an upper limit of \eqn{\log(5)} will be used for \eqn{\xi}
 #' @param fitopt list with options to pass to \code{control} argument of optimizer (see details)
 #' @return \code{optim} object with fit results.
 #' @references David Firth, Bias reduction of maximum likelihood estimates, Biometrika, Volume 80, Issue 1, March 1993, Pages 27–38, \href{https://doi.org/10.1093/biomet/80.1.27}{https://doi.org/10.1093/biomet/80.1.27}
-#' @importFrom stats optim
+#' @importFrom stats optim constrOptim
 #' @details This function looks for roots of the Firth-corrected score functions.
 #'
 #' The underlying model is HR=\eqn{\sum(1+\beta d_l)exp(\alpha_l+X^T\gamma)}, where the sum is over organ locations. Here \eqn{\beta} is the dose effect, \eqn{\alpha} are the location effects and \eqn{\gamma} are other covariate effects. The model can be reparametrized to HR=\eqn{\sum(1+exp(\xi) d_l)exp(\alpha_l+X^T\gamma)} using \code{repar=TRUE}. In the original parametrization, \eqn{\beta} is constrained such that HR cannot be negative. There are different choices for the design used to estimate the parameters: mean organ dose, CCML, CL, and CCAL. Mean organ dose (\code{ccmethod='meandose'}) uses the mean of the supplied location doses and compares that mean dose between case and matched controls. The other choices (CCML, CL and CCAL) use the tumor location for the case and compare either only between patients (CCML), only within patients (CL) or both between and within patients (CCAL). CCML only compares the same location between patients, and hence cannot be used to estimate location effects. Similarly, CL compares within patients and cannot be used to estimate covariate effects other than dose, meaning \code{corrvars} should not be supplied for CL. For this model, the Firth correction (Firth 1993) is used as a method for bias correction, or for obtaining an estimate when there is separation in the data.
@@ -38,7 +38,8 @@
 
 linearERRfirth <- function(data, doses, set, status, loc, corrvars=NULL, repar=FALSE, ccmethod="CCAL", initpars=NULL,lowerlim=NULL, upperlim=NULL, fitopt=list(maxit=5000)){
 
-  if(ccmethod=="CL") corrvars <- NULL
+  if(ccmethod=="CL" & !is.null(corrvars)) stop("corrvars needs to be set to NULL when using CL")
+  #if(ccmethod=="CL") corrvars <- NULL
 
 
   if(is.null(initpars)){
@@ -47,7 +48,10 @@ linearERRfirth <- function(data, doses, set, status, loc, corrvars=NULL, repar=F
   }
 
   if(is.null(lowerlim)) lowerlim <- rep(-Inf, length(initpars))
-  if(is.null(upperlim)) upperlim <- rep(Inf, length(initpars))
+  if(is.null(upperlim)) {
+    upperlim <- rep(Inf, length(initpars))
+    if(repar) upperlim[1] <- log(5)
+  }
 
 
   if(ccmethod%in%c("CCML","meandose") & length(initpars)!=(length(corrvars)+1)) stop("Length of initpars incorrect. Please provide an initial value for the dose effect and one for each of the other covariates.")
@@ -60,6 +64,7 @@ linearERRfirth <- function(data, doses, set, status, loc, corrvars=NULL, repar=F
 
 
 
+
   scorefun <- function(params){
     linERRscore(params=params,data=data, doses=doses, set=set, status=status, loc=loc, ccmethod=ccmethod, corrvars=corrvars, repar=repar)
   }
@@ -68,7 +73,7 @@ linearERRfirth <- function(data, doses, set, status, loc, corrvars=NULL, repar=F
   if(ccmethod %in% c("CCML", "meandose") & length(corrvars)==0){
     opt_method <- "Brent"
   } else{
-    opt_method <- "L-BFGS-B"
+    opt_method <- "constrOptim"
   }
 
   if(opt_method=="Brent" & length(initpars)>1) initpars=initpars[1]
@@ -80,18 +85,18 @@ linearERRfirth <- function(data, doses, set, status, loc, corrvars=NULL, repar=F
   if(is.null(fitopt$maxit)){
     fitopt <- c(fitopt, list(maxit=5000))
   }
-  if(is.null(fitopt$reltol) & opt_method!="L-BFGS-B"){
+  if(is.null(fitopt$reltol)){
     fitopt <- c(fitopt, list(reltol=1e-10))
   }
-  if (is.null(fitopt$pgtol) & opt_method=="L-BFGS-B"){
-    fitopt <- c(fitopt, list(pgtol=1e-8))
-  }
-  if (is.null(fitopt$factr) & opt_method=="L-BFGS-B"){
-    fitopt <- c(fitopt, list(factr=1e4))
-  }
-  if (is.null(fitopt$ndeps) & opt_method=="L-BFGS-B"){
-    fitopt <- c(fitopt, list(ndeps=rep(1e-5, length(initpars))))
-  }
+  # if (is.null(fitopt$pgtol) & opt_method=="L-BFGS-B"){
+  #   fitopt <- c(fitopt, list(pgtol=1e-8))
+  # }
+  # if (is.null(fitopt$factr) & opt_method=="L-BFGS-B"){
+  #   fitopt <- c(fitopt, list(factr=1e4))
+  # }
+  # if (is.null(fitopt$ndeps) & opt_method=="L-BFGS-B"){
+  #   fitopt <- c(fitopt, list(ndeps=rep(1e-5, length(initpars))))
+  # }
 
 
 
@@ -106,12 +111,27 @@ linearERRfirth <- function(data, doses, set, status, loc, corrvars=NULL, repar=F
     if(!repar) {lw[1] <- max(lw[1],-1/max(rowMeans(data[,doses]))+.0001)}
   }
 
-  fit <- optim(initpars,
-               function(x){
-                 tmp <- scorefun(x)
-                 sum((tmp$U+tmp$A)^2)
-               },method=opt_method, control=fitopt, lower=lw, upper=up)
+  if(opt_method=="Brent"){
 
+    fit <- optim(initpars,
+                 function(x){
+                   tmp <- scorefun(x)
+                   sum((tmp$U+tmp$A)^2)
+                 },method=opt_method, control=fitopt, lower=lw, upper=up)
+  } else {
+
+    ui <- rbind(-1*diag(length(initpars)), diag(length(initpars)))
+    ci <- c(-1*up, lw)
+
+    ui <- ui[which(!is.infinite(ci)),, drop=FALSE]
+    ci <- ci[which(!is.infinite(ci))]
+
+    fit <- constrOptim(initpars,
+                       function(x){
+                         tmp <- scorefun(x)
+                         sum((tmp$U+tmp$A)^2)
+                       }, grad=NULL, control=fitopt, ci=ci,ui=ui, outer.iterations = 200)
+  }
 
 
   return(fit)

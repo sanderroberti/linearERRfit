@@ -177,9 +177,9 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
     )
   } else {
     #U <- lapply(Ulong, function(x) x[datalong[,names(data)[status]]==1])
-    U <- Ulong[datalong[,names(data)[status]]==1,]
+    U <- Ulong[datalong[,names(data)[status]]==1,,drop=FALSE]
     U2 <- lapply(U2long, function(x) {
-      y[datalong[,names(data)[status]]==1,,drop=FALSE]}
+      x[datalong[,names(data)[status]]==1,,drop=FALSE]}
     )
   }
 

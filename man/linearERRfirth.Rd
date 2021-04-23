@@ -38,9 +38,9 @@ linearERRfirth(
 
 \item{initpars}{initial values for parameters, default is 0 for all parameters. If supplying a different vector, use a vector with an initial value for all free parameters (\eqn{\beta} or \eqn{\xi}, one for each location effect (except the reference) when using CL or CCAL, and for each other covariate if applicable, in that order). Note that if \code{repar=TRUE}, the first initial value is used for \eqn{\xi}.}
 
-\item{lowerlim}{lower bound for model parameters, in the same order as \code{initpars}. When not supplied, -\code{Inf} is used for all coefficients (except when \code{repar=FALSE}, see details). Note that when \code{repar=TRUE}, the first entry is the lower limit for \eqn{\xi}}
+\item{lowerlim}{lower bound for model parameters, in the same order as \code{initpars}. At least one upper or lower limit needs to be finite. Note that when \code{repar=TRUE}, the first entry is the lower limit for \eqn{\xi}. When \code{repar=FALSE}, the lower limit for \eqn{\beta} cannot be smaller than \eqn{-1/max(d)} where the maximum is taken among all relevant doses for the chosen \code{ccmethod}. If this is the case, the limit will automatically be changed to that value}
 
-\item{upperlim}{upper bound for model parameters, in the same order as \code{initpars}. When not supplied, \code{Inf} is used for all coefficients. Note that when \code{repar=TRUE}, the first entry is the upper limit for \eqn{\xi}}
+\item{upperlim}{upper bound for model parameters, in the same order as \code{initpars}. At least one upper or lower limit needs to be finite. Note that when \code{repar=TRUE}, the first entry is the upper limit for \eqn{\xi}. When \code{repar=TRUE}, if no other lower or upper limit is given as input, an upper limit of \eqn{\log(5)} will be used for \eqn{\xi}}
 
 \item{fitopt}{list with options to pass to \code{control} argument of optimizer (see details)}
 }

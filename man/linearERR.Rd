@@ -100,6 +100,6 @@ data(linearERRdata1)
 fitCCML <- linearERR(data=linearERRdata1, set=1, doses=2:6, status=8,
 loc=7, corrvars=9, repar=FALSE, ccmethod="CCML", doJK1=TRUE)
 
-fitCCML$MLE
+fitCCML$MLE$coef
 fitCCML$jackknife$firstorder$coef
 }
