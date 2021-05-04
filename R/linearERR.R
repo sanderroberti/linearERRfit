@@ -115,7 +115,7 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
 
     jk1included <- (1-1*(jk1coefs[,1]==ifelse(repar,log(uplimBeta),uplimBeta)))*(rowSums(jk1scores^2)<jkscorethresh)*(1-(jk1conv==1))*(jk1coefs[,1]>=jkvalrange[1])*(jk1coefs[,1]<=jkvalrange[2])
 
-    jk1coef <- length(setnrs)*mainfit$fit$par-(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,])
+    jk1coef <- length(setnrs)*mainfit$fit$par-(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,, drop=FALSE])
 
     jk1details <- data.frame(cbind(set=setnrs, included=jk1included,conv=jk1conv,coef=jk1coefs,score=jk1scores))
 
