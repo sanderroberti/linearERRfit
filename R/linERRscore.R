@@ -63,13 +63,13 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
 
 
   if(ccmethod=="CCAL"){
-    X <- data.frame(D=datalong$dose/(1+params[1]*datalong$dose), model.matrix(~factor(loc)-1, data=datalong)[,-1], datalong[, names(data)[corrvars], drop=FALSE])
+    X <- data.frame(D=datalong$dose/(1+params[1]*datalong$dose), model.matrix(~factor(datalong[,names(data)[loc]])-1)[,-1], datalong[, names(data)[corrvars], drop=FALSE])
   } else if(ccmethod=="CCML"){
     datalong <- datalong[datalong$loc == datalong[,names(data)[loc]],]
     X <- data.frame(D=datalong$dose/(1+params[1]*datalong$dose), datalong[, names(data)[corrvars], drop=FALSE])
   } else if(ccmethod=="CL"){
     datalong <- datalong[datalong[names(data)[status]]==1,]
-    X <- data.frame(D=datalong$dose/(1+params[1]*datalong$dose), model.matrix(~factor(loc)-1, data=datalong)[,-1], datalong[, names(data)[corrvars], drop=FALSE])
+    X <- data.frame(D=datalong$dose/(1+params[1]*datalong$dose), model.matrix(~factor(datalong[,names(data)[loc]])-1)[,-1], datalong[, names(data)[corrvars], drop=FALSE])
   } else if(ccmethod=="meandose"){
     datalong <- data[,-c(doses)]
     datalong$dose <- rowMeans(data[,doses])
@@ -77,7 +77,7 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
   }
 
   S0long <- (1+params[1]*datalong$dose)*exp(as.matrix(datalong[,names(data)[corrvars], drop=FALSE])%*%delta)
-  if(ccmethod!="meandose") S0long <- S0long*exp(model.matrix(~factor(loc)-1, data=datalong)%*%alpha)
+  if(ccmethod!="meandose") S0long <- S0long*exp(model.matrix(~factor(datalong[,names(data)[loc]])-1)%*%alpha)
 
   S0 <- as.data.frame(data.table(S0long)[, list(S0=sum(V1)), by=list(set=datalong[,names(data)[set]])]) #aggregate(list(S0=S0long),by=list(set=datalong[,names(data)[set]]), FUN=sum)
 
