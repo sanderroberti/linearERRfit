@@ -117,7 +117,7 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
 
     jk1coef <- length(setnrs)*mainfit$fit$par-(length(setnrs)-1)*colMeans(jk1coefs[jk1included==1,, drop=FALSE])
 
-    jk1details <- data.frame(cbind(set=setnrs, included=jk1included,conv=jk1conv,coef=jk1coefs,score=jk1scores))
+    jk1details <- data.frame(set=setnrs, included=jk1included,conv=jk1conv,coef=jk1coefs,score=jk1scores)
 
     jackknife1 <- list(coef=jk1coef, details=jk1details)
     close(pb)
@@ -157,7 +157,7 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
 
     allpairs <- as.data.frame(allpairs)
     names(allpairs) <- c("set1","set2")
-    jk2details <- data.frame(cbind(allpairs, included=jk2included,conv=jk2conv,coef=jk2coefs,score=jk2scores))
+    jk2details <- cbind(allpairs, data.frame(included=jk2included,conv=jk2conv,coef=jk2coefs,score=jk2scores))
 
     jackknife2 <- list(coef=jk2coef, details=jk2details)
     close(pb2)
