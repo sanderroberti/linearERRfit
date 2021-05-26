@@ -210,7 +210,7 @@ linearERRfit <- function(data, doses, set, status, loc, corrvars=NULL, repar=FAL
     fit <- optim(initpars, function(x){
       likfun(c(x, rep(0, length(doses)+length(corrvars)-1)))
     }, method=opt_method, lower=lw, upper=up, control=fitopt, hessian=TRUE)
-
+    names(fit$par) <- names
     fit$fullcoef <- fit$par
     fit$betathresh <- betathresh
   }
