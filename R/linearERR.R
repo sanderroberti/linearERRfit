@@ -108,9 +108,9 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
     })
 
     jk1coefs <- sapply(jk1out, function(x) x$fit$fit$par)
-    jk1coefs <- as.data.frame(matrix(jk1coefs, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,names(jk1out[[1]]$fit$fit$par))))
+    jk1coefs <- as.data.frame(matrix(jk1coefs, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,paste0("coef.",names(jk1out[[1]]$fit$fit$par)))))
     jk1scores <- sapply(jk1out, function(x) x$score)
-    jk1scores <- as.data.frame(matrix(jk1scores, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,names(jk1out[[1]]$fit$fit$par))))
+    jk1scores <- as.data.frame(matrix(jk1scores, nrow=length(setnrs),byrow=TRUE, dimnames=list(NULL,paste0("score.",names(jk1out[[1]]$fit$fit$par)))))
     jk1conv <- sapply(jk1out, function(x) x$fit$fit$convergence)
 
     jk1included <- (1-1*(jk1coefs[,1]==ifelse(repar,log(uplimBeta),uplimBeta)))*(rowSums(jk1scores^2)<jkscorethresh)*(1-(jk1conv==1))*(jk1coefs[,1]>=jkvalrange[1])*(jk1coefs[,1]<=jkvalrange[2])
@@ -146,9 +146,9 @@ linearERR <- function(data, doses, set, status, loc, corrvars=NULL, ccmethod="CC
     })
 
     jk2coefs <- sapply(jk2out, function(x) x$fit$fit$par)
-    jk2coefs <- as.data.frame(matrix(jk2coefs, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,names(jk2out[[1]]$fit$fit$par))))
+    jk2coefs <- as.data.frame(matrix(jk2coefs, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,paste0("coef.",names(jk2out[[1]]$fit$fit$par)))))
     jk2scores <- sapply(jk2out, function(x) x$score)
-    jk2scores <- as.data.frame(matrix(jk2scores, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,names(jk2out[[1]]$fit$fit$par))))
+    jk2scores <- as.data.frame(matrix(jk2scores, nrow=nrow(allpairs),byrow=TRUE, dimnames=list(NULL,paste0("score.",names(jk2out[[1]]$fit$fit$par)))))
     jk2conv <- sapply(jk2out, function(x) x$fit$fit$convergence)
 
     jk2included <- (1-1*(jk2coefs[,1]==ifelse(repar,log(uplimBeta),uplimBeta)))*(rowSums(jk2scores^2)<jkscorethresh)*(1-(jk2conv==1))*(jk2coefs[,1]>=jkvalrange[1])*(jk2coefs[,1]<=jkvalrange[2])
