@@ -32,23 +32,27 @@ linERRloglik <- function(params, data, doses, set, status, loc, corrvars=NULL, c
 
   beta0 <- params[1]
 
+  # alpha are location effects
   if(ccmethod %in% c("CCAL","CL")){
     alpha <- c(0,params[2:(length(doses))])
   } else {
     alpha <- rep(0,length(doses))
   }
 
-  delta <- tail(params, length(corrvars))
+  # gamma are other patient-level effect parameters
+  gamma <- tail(params, length(corrvars))
 
   if(!ccmethod=="meandose"){
 
-    rrmat <- matrix(rep(exp(as.matrix(data[,corrvars,drop=FALSE])%*%delta), length(doses)), ncol=length(doses))*(1+beta0*data[,doses])*matrix(rep(exp(alpha), nrow(data)), ncol=length(doses), byrow=TRUE)
+    # rrmat is a matrix with relative risk for each location (columns) from each patient (rows)
+    rrmat <- matrix(rep(exp(as.matrix(data[,corrvars,drop=FALSE])%*%gamma), length(doses)), ncol=length(doses))*(1+beta0*data[,doses])*matrix(rep(exp(alpha), nrow(data)), ncol=length(doses), byrow=TRUE)
 
     if(ccmethod=="CCAL"){
       # CCAL
 
       rrcases <- rrmat[data[,status]==1,][cbind(1:sum(data[,status]), data[data[,status]==1,loc])]
 
+      # reshape rrmat to wide format (with each row representing an entire matched set of locations) for efficient summation
       rrdf <- data.frame(set=data[,set], id=1,rrmat)
       rrdf$id <- with(rrdf, ave(as.numeric(set), set, FUN = seq_along))
       rrdfwide <- reshape(rrdf, direction="wide", idvar="set",timevar="id")
@@ -67,6 +71,7 @@ linERRloglik <- function(params, data, doses, set, status, loc, corrvars=NULL, c
       # CCML
       rrcases <- rrmat[data[,status]==1,][cbind(1:sum(data[,status]), data[data[,status]==1,loc])]
 
+      # reshape rrmat to wide format (with each row representing an entire matched set of locations) for efficient summation
       rrdf <- data.frame(set=data[,set], id=1, rrmat[cbind(1:nrow(rrmat), data[,loc])])
       rrdf$id <- with(rrdf, ave(as.numeric(set), set, FUN = seq_along))
       rrdfwide <- reshape(rrdf, direction="wide", idvar="set",timevar="id")
@@ -74,8 +79,9 @@ linERRloglik <- function(params, data, doses, set, status, loc, corrvars=NULL, c
       minuslogl <- -(sum(log(rrcases)) - sum(log(rowSums(rrdfwide[,-1], na.rm=TRUE))))
     }
   } else {
+    # Mean dose method, rrmat based on mean dose and patient-level effects
 
-    rrmat <- (1+beta0*rowMeans(data[,doses]))*exp(as.matrix(data[,corrvars,drop=FALSE])%*%delta)
+    rrmat <- (1+beta0*rowMeans(data[,doses]))*exp(as.matrix(data[,corrvars,drop=FALSE])%*%gamma)
     rrdf <- data.frame(set=data[,set], id=1, rrmat)
     rrdf$id <- with(rrdf, ave(as.numeric(set), set, FUN = seq_along))
     rrdfwide <- reshape(rrdf, direction="wide", idvar="set",timevar="id")
