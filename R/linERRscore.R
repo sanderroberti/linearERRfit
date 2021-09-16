@@ -85,6 +85,7 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
   S0long <- (1+params[1]*datalong$dose)*exp(as.matrix(datalong[,names(data)[corrvars], drop=FALSE])%*%gamma)
   if(ccmethod!="meandose") S0long <- S0long*exp(model.matrix(~factor(loc)-1, data=datalong)%*%alpha)
 
+  # Create S0 by aggregating S0long within each matched set
   S0 <- as.data.frame(data.table(S0long)[, list(S0=sum(V1)), by=list(set=datalong[,names(data)[set]])]) #aggregate(list(S0=S0long),by=list(set=datalong[,names(data)[set]]), FUN=sum)
 
   #SX <- lapply(X, function(x) as.data.frame(data.table(x*S0long)[, list(SX=sum(V1)), by=list(set=datalong[,names(data)[set]])]))#aggregate(list(SX=x*S0long), by=list(set=datalong[,names(data)[set]]),FUN=sum))
