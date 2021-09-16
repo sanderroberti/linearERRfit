@@ -273,6 +273,7 @@ linERRscore <- function(params,data, doses, set, status, loc, ccmethod, corrvars
     names(U) <- names(A) <- c(ifelse(repar,"xi","beta"),names(data)[corrvars])
   }
 
-  list(U=U, A=A, invinfomat=invinfomat)
+  list(U=U, A=A, infomat=EUU)
+
 }
 
