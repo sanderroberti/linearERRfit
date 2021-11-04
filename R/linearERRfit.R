@@ -156,7 +156,7 @@ linearERRfit <- function(data, doses, set, status, loc, corrvars=NULL, repar=FAL
       }
     } else if(opt_method=="Brent") {
       fxd <- NULL
-      lw <- list(params=ifelse(repar, -10,  -1/max(data[,doses][cbind(1:nrow(data), data[,loc])])+.0001))
+      lw <- list(params=ifelse(repar, -10,  -1/max(rowMeans(data[,doses]))+.0001))
       up <- list(params=ifelse(repar,log(uplimBeta),uplimBeta))
     }# else { # Nelder-Mead
     #   fxd <- sapply(paste0("alpha",2:length(doses)), function(i) 0)
